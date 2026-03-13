@@ -21,9 +21,12 @@ class Solution{
         void simulatedAnnealing(float initial_temp, float final_temp, int max_iterations);
         //struktura do branch and bound
 
-        
+        //LICZENIE CMAX DLA NO WAIT FLOW SHOP
+        int noWaitCmax(); //liczenie Cmaxa klasycznie
+        int calculateDelay(int job1, int job2);
     public:
         Solution();
         void menu();
         void annealingTest(std::string filename);
+        void noWaitCmaxTest();
 };

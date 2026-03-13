@@ -553,3 +553,49 @@ void Solution::annealingTest(std::string filename){
     }
     std::cout<<"done"<<std::endl;
 }
+
+int Solution::noWaitCmax()
+{
+    int C;
+
+    for (int i = 0; i < result.size() - 1; i++) {
+        C += calculateDelay(result[i], result[i + 1]); //obliczmy delay dla każdej pary zadań z wyniku i dodajemy do C
+    }
+
+    //doajemy do cmaxa czasy wykonywania się ostatniego zadania
+    int lastJob = result.back();
+    for (int k = 0; k < m; k++) {
+        C += problem[lastJob].getProductPj(k);
+    }
+
+    return C;
+}
+
+int Solution::calculateDelay(int job1, int job2){
+    //zmienna m -> ile maszyn
+    int maxDelay = 0; //największy znaleziony potrzebny delay pomiędzy Job1 i Job2
+    int sumJob1 = 0;
+    int sumJob2 = 0;
+
+    //bierzemy czasy dla zadan i obliczmy dla każdej maszynuy jaki będzie delay pomiędzy maszyną k dla Job1 a k-1 Job2
+    //zadania wykonuja sie bezprzerwy (po prostu sumy czasow), obliczamy delay i patrzymy gdzie jest najwiekszy
+
+    for (int k = 0; k < m; ++k) {
+        sumJob1 += problem[job1].getProductPj(k); // suma czasow wykonywania do maszyny k dla job1
+        
+        if (k > 0) {
+            sumJob2 += problem[job2].getProductPj(k-1); // suma czasow wykonywania do maszyny k-1 dla job2
+        }
+        
+        int currentDelay = sumJob1 - sumJob2; //obecny delay to roznica w wykonywaniu czasu dla job1 a job2 bez przerw
+
+        maxDelay = std::max(currentDelay, maxDelay);
+    }
+    return maxDelay;
+}
+
+void Solution::noWaitCmaxTest(){
+    //kolejność i dane z fill test data -> result = 0,1,2,3
+    int testCmax = noWaitCmax();
+    std::cout<<"Cmax: "<<testCmax<<std::endl;
+}
