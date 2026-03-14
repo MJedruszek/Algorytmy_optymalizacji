@@ -36,6 +36,11 @@ void Solution::fillTestData(){
     result.push_back(2);
     result.push_back(3);
     // Cmax = countCmax();
+
+    //Job 0: 3 2 4 
+    //Job 1: 1 4 6 
+    //Job 2: 3 7 1 
+    //Job 3: 2 5 1 
 }
 
 void Solution::readFromFile(std::string fname){
@@ -556,7 +561,7 @@ void Solution::annealingTest(std::string filename){
 
 int Solution::noWaitCmax()
 {
-    int C;
+    int C = 0;
 
     for (int i = 0; i < result.size() - 1; i++) {
         C += calculateDelay(result[i], result[i + 1]); //obliczmy delay dla każdej pary zadań z wyniku i dodajemy do C
@@ -579,7 +584,6 @@ int Solution::calculateDelay(int job1, int job2){
 
     //bierzemy czasy dla zadan i obliczmy dla każdej maszynuy jaki będzie delay pomiędzy maszyną k dla Job1 a k-1 Job2
     //zadania wykonuja sie bezprzerwy (po prostu sumy czasow), obliczamy delay i patrzymy gdzie jest najwiekszy
-
     for (int k = 0; k < m; ++k) {
         sumJob1 += problem[job1].getProductPj(k); // suma czasow wykonywania do maszyny k dla job1
         
@@ -594,8 +598,134 @@ int Solution::calculateDelay(int job1, int job2){
     return maxDelay;
 }
 
+void Solution::calculateDelayMatrix(){
+    //m -> ile maszyny
+    int n = problem.size(); //ile mamy zadan
+    delays.assign(n, std::vector<int>(n, 0)); //zmieniamy rozmiar delays i wypelniamy 0
+    totalP.assign(n, 0);
+
+    //obliczanie czasow robienia zadania na maszynie
+    for (int i = 0; i < n; i++) {
+        int totalT = 0;
+        for (int k = 0; k < m; ++k) {
+            totalT += problem[i].getProductPj(k);
+        }
+        totalP[i] = totalT;
+    }
+
+    //obliczanie delays delays[i][j] -> opoznienie pracy dla kolejności i-j
+    //delay dla i-j != j-i
+    for (int i = 0; i < n; i++) {
+        for (int j = 0; j < n; j++){
+            
+            //nie ma delay dla tego samego zadania podwojnie
+            if (i == j) {
+                delays[i][j] = 0; 
+                continue;
+            }
+
+            delays[i][j] = calculateDelay(i,j);
+        }
+    }
+}
+
+int Solution::calculateSwap(int pos1, int pos2){
+    int n = problem.size();
+
+    //jesli to są te same pozycje to nic sie nie zmienia
+    if(pos1==pos2) return 0;
+
+    //zmieniamy zeby pos1 byla mniejsza (pos1, pos2) -> ulatwienie potem logiki
+    if (pos1 > pos2) std::swap(pos1, pos2);
+
+    //pobieramy numery zadan na poz 1 i 2
+    int job1 = result[pos1];
+    int job2 = result[pos2];
+
+    int delta = 0;
+
+    //Sytuacja A: wymieniane zadania są obok siebie np. poz 2 i 3
+    if(pos1+1 == pos2){
+        //usuwamy stare polaczenia
+        if(pos1>0) delta -= delays[result[pos1-1]][job1]; //link po lewej od pos1 (jesli job1 nie jest 0)
+        delta -= delays[job1][job2]; //zawsze niszczymy polaczenie job1 job2
+        if(pos2<n-1) delta -= delays[job2][result[pos2+1]]; //link po prawej od pos2 (jesli job2 nie jest ostatni)
+
+        //tworzymy nowe
+        if(pos1>0) delta += delays[result[pos1-1]][job2]; //link po lewej pos1-1 i job2 (jesli pos1-1 istnieje)
+        delta += delays[job2][job1]; //polaczenie job2 job1 (zamiana kolejnosci, zawsze jest)
+        if(pos2<n-1) delta += delays[job1][result[pos2+1]]; //link po prawej job1 i pos2+1 (jesli pos2+1 istnieje)
+    }
+    else{ //sytuacja B: wymieniane zadania nie są obok siebie (min 1 inne zad pomiędzy)
+        //usuwamy stare
+        if(pos1>0) delta -= delays[result[pos1-1]][job1]; //link po lewej od pos1 (jesli job1 nie jest 0)
+        delta -= delays[job1][result[pos1+1]]; //zawsze niszczymy polaczenie job1 i zadanie po prawej
+        delta -= delays[result[pos2-1]][job2]; //zawsze niszczymy polaczenie zadanie po lewej i job2
+        if(pos2<n-1) delta -= delays[job2][result[pos2+1]]; //link po prawej od pos2 (jesli job2 nie jest ostatni)
+
+        //tworzymy nowe
+        if(pos1>0) delta += delays[result[pos1-1]][job2]; //link po lewej - pos1-1 i job2 (jesli pos1 nie jest 0)
+        delta += delays[job2][result[pos1+1]]; //polaczenie job2 i zadanie po prawej od pos1
+        delta += delays[result[pos2-1]][job1]; //polaczenie zadanie po lewej od pos2 i job1
+        if(pos2<n-1) delta += delays[job1][result[pos2+1]]; //link po prawej - job1 i pos2+1 (jesli pos2+1 istnieje)
+    }
+
+    //jesli zadanie job2 (pos2==0) jest ostatnie to trzeba zamienic czas wykonywania na ostatniej maszynie na job1
+    if(pos2 == n-1){
+        delta -= totalP[job2];
+        delta += totalP[job1];
+    }
+
+    return delta;
+}
+
+int Solution::cmaxDelays(){
+    int C = 0;
+    for(int i=0; i<result.size()-1; i++)
+    {
+        C+=delays[result[i]][result[i+1]];
+    }
+
+    C += totalP[result.back()];
+    return C;
+}
+
 void Solution::noWaitCmaxTest(){
     //kolejność i dane z fill test data -> result = 0,1,2,3
+    std::cout << "--- ZADANIA ---" << std::endl;
+    for (int i = 0; i < result.size(); i++) {
+    std::cout << "Job " << i << ": ";
+    for (int k = 0; k < m; k++) {
+        std::cout << problem[i].getProductPj(k) << " ";
+    }
+    std::cout << std::endl;
+    }
+    std::cout << "--------------" << std::endl;
+
     int testCmax = noWaitCmax();
+    calculateDelayMatrix();
     std::cout<<"Cmax: "<<testCmax<<std::endl;
+
+    int testCmaxD = cmaxDelays();
+    std::cout<<"Cmax z delayMatrix: "<<testCmaxD<<std::endl;
+
+    //dla testow zamiana z result zadania na poz 0 i 2 (faktycznie nie ma zamiany)
+    int delta = calculateSwap(0,2);
+    int newCmax = testCmax + delta;
+    std::cout<<"Nowy Cmax dla zamiany 0 i 2: "<<newCmax<<std::endl;
+    std::cout<<"Delta "<<delta<<std::endl;
+
+    //dla testow zamiana z result zadania na poz 1 i 2 (faktycznie nie ma zamiany)
+    delta = calculateSwap(2,1);
+    newCmax = testCmax + delta;
+    std::cout<<"Nowy Cmax dla zamiany 1 i 2: "<<newCmax<<std::endl;
+    std::cout<<"Delta "<<delta<<std::endl;
+
+    /*----- JAK URUCHOMIC LICZENIE W SA -----*/
+    /*1. Uruchomic funkcje calculateDelayMatrix()*/
+    /*2. Uruchomic cmaxDelays() dla obliczenia startowego cmax (dla pierwszego result)*/
+    /*3. Bierzemy 2 pozycje dla zmian (np losowo czy jakos inaczej)*/
+    /*4. Wrzucasz delta = calculateSwap(poz1, poz2), bez faktycznego zmieniania result*/
+    /*5. obliczasz nowy cmax - newCmax = testCmax + delta*/
+    /*6. Robisz akceptacje wyniku i dopiero wtedy zmieniasz kolejnosc w result*/
 }

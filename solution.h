@@ -6,6 +6,8 @@ class Solution{
         int Cmax;
         std::vector<int> result; //przechowujemy kombinację, która oznacza kolejność w rozwiązaniu
         int m; //ile kroków ma jeden produkt/ile maszyn należy wykorzystać
+        std::vector<std::vector<int>> delays; //macierz opoznien pomiedzy Jobi i Jobj -> delays[i][j]
+        std::vector<int> totalP; //tab dla czasow wykonywania dla job na wszystkich maszynach
         int sumOfP(int i); //oblicza czas dla maszyny i
         int countCmax();
         void fillTestData();
@@ -24,6 +26,9 @@ class Solution{
         //LICZENIE CMAX DLA NO WAIT FLOW SHOP
         int noWaitCmax(); //liczenie Cmaxa klasycznie
         int calculateDelay(int job1, int job2);
+        void calculateDelayMatrix();
+        int calculateSwap(int pos1, int pos2);
+        int cmaxDelays();
     public:
         Solution();
         void menu();
