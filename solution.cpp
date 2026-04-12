@@ -155,6 +155,7 @@ std::vector<std::vector<int>> Solution::generateNeighbours(std::vector<int> curr
 }
 
 std::pair<int, int> Solution::findSwapped(std::vector<int> curr, std::vector<int> neigh){
+    
     std::pair<int,int> found = std::pair(-1,-1);
     for(int i = 0; i<curr.size(); i++){
         if(curr[i]!=neigh[i]){
@@ -163,6 +164,28 @@ std::pair<int, int> Solution::findSwapped(std::vector<int> curr, std::vector<int
         }
     }
     return found;
+}
+
+std::vector<int> Solution::generateBestNeighbour(std::vector<int> curr, int size){
+    //Tworzymy sąsiedztwo
+    std::vector<std::vector<int>> neighs = generateNeighbours(curr, size);
+    //Szukamy najlepszego rozwiązania wśród nich
+    int best_cmax = INT32_MAX;
+    result = curr;
+    int result_cmax = cmaxDelays();
+    std::vector<int> best_neigh = curr;
+    for(int i = 0; i<size; i++){
+        //znajdź wymienione elementy
+        std::pair<int,int> swap = findSwapped(result, neighs[i]);
+        //oblicz cmax po zamianie
+        int delta = calculateSwap(swap.first,swap.second);
+        int curr_cmax = result_cmax + delta;
+        if(curr_cmax<best_cmax){
+            best_cmax = curr_cmax;
+            best_neigh = neighs[i];
+        } 
+    }
+    return best_neigh;
 }
 
 void Solution::QNEH(){
@@ -343,12 +366,19 @@ void Solution::QNEH(){
     Cmax = countCmax();
 }
 
-void Solution::simulatedAnnealing(float initial_temp, float final_temp, int max_iterations){
+void Solution::simulatedAnnealing(float initial_temp, float final_temp, int max_iterations, Version v){
+    
     QNEH();
+    calculateDelayMatrix();
+    
     //neh
+    int n = 1;
+    if(v==GREEDY || v==BOTH){
+        n = max_iterations/200;
+    }
+    
     std::vector<int> best_sequence = result;
-    result = best_sequence;
-    int best_cmax = countCmax();
+    int best_cmax = cmaxDelays();
     std::random_device rd;
     std::mt19937 gen(rd());
     std::uniform_real_distribution<double> dis(0.0, 1.0);
@@ -362,14 +392,26 @@ void Solution::simulatedAnnealing(float initial_temp, float final_temp, int max_
 
     float temp = initial_temp;
     int i = 0;
+    int last = 0;
+
 
     while(temp>final_temp && i<max_iterations){
+        std::vector<int> neigh;
+        //tworzymy losowego sąsiada/sąsiadów (wtedy wybieramy od razu najlepszego)
+        if(n == 1){
+            neigh = generateRandomNeigh(current_sequence);
+        }
+        else{
+            neigh = generateBestNeighbour(current_sequence, n);
+        }
         
-        //tworzymy losowego sąsiada
-        std::vector<int> neigh = generateRandomNeigh(current_sequence);
-        result = neigh;
-        int tmp_c = countCmax();
-
+        //przywróć prawidłowe result i jego cmax(dla obliczeń) - powinno być odpowiednie, ale przezorny zawsze ubezpieczony
+        result = current_sequence;
+        //znajdź zamienione elementy
+        std::pair<int,int> swap = findSwapped(result, neigh);
+        //oblicz cmax po zamianie
+        int delta = calculateSwap(swap.first,swap.second);
+        int tmp_c = current_cmax + delta;
         int diff = tmp_c - current_cmax;
         double r = dis(gen);
 
@@ -386,10 +428,17 @@ void Solution::simulatedAnnealing(float initial_temp, float final_temp, int max_
                 best_cmax = current_cmax;
                 best_sequence = current_sequence;
                 //std::cout<<"HERE"<<std::endl;
+                last = 0;
             }
         }
-        temp = temp * cooling_rate;
+        //jeśli nie mamy włączonego reheating, zmniejsz temp
+        if(v == NORMAL || v == GREEDY) temp = temp * cooling_rate;
+        //jeśli nie przekroczyliśmy 20% wszystkich iteracji bez poprawy, zmniejsz temp 
+        else if (last<=(max_iterations/5)) temp = temp * cooling_rate;
+        //jeśli już minęło 20%, zwiększ temperaturę do 1/4 początkowej
+        else temp = initial_temp/4;
         i++;
+        last++;
     }
     Cmax = best_cmax;
     result = best_sequence;
@@ -414,12 +463,16 @@ void Solution::menu(){
     int neigh_size = problem.size();
     float initial_temp = 1000000.0;
     float final_temp = 0.001;
+    Version ver = NORMAL;
 
     while(choice != 'q'){
         std::cout<<"Wybierz, jakim algorytmem chcesz rozwiązać zadanie: "<<std::endl;
         std::cout<<"0 - QNEH"<<std::endl;
         std::cout<<"1 - bruteforce, czyli pszeszukanie wszystkich permutacji"<<std::endl;
-        std::cout<<"2 - symulowane wyżarzanie"<<std::endl;
+        std::cout<<"2 - symulowane wyżarzanie (standardowe)"<<std::endl;
+        std::cout<<"3 - symulowane wyżarzanie (k sąsiadów)"<<std::endl;
+        std::cout<<"4 - symulowane wyżarzanie (zwiększenie temperatury)"<<std::endl;
+        std::cout<<"5 - symulowane wyżarzanie (obie zmiany)"<<std::endl;
         std::cout<<"Aby wyświetlić ostatnie zapisane rozwiązanie, wpisz p"<<std::endl;
         std::cout<<"Aby wyjść, wpisz q"<<std::endl;
         std::cin>>choice;
@@ -450,11 +503,44 @@ void Solution::menu(){
             case '2':
                 std::cout<<"-------------------------"<<std::endl;
                 t1 = std::chrono::high_resolution_clock::now();
-                simulatedAnnealing(initial_temp, final_temp, max_iters);
+                simulatedAnnealing(initial_temp, final_temp, max_iters, ver);
                 t2 = std::chrono::high_resolution_clock::now();
                 ms_int = std::chrono::duration_cast<std::chrono::milliseconds>(t2 - t1);
                 std::cout<<ms_int.count()<<" w milisekundach"<<std::endl;
                 std::cout<<"Rozwiązano algorytmem symulowanego wyżarzania, Cmax = "<<Cmax<<std::endl;
+                std::cout<<"-------------------------"<<std::endl;
+                break;
+            case '3':
+                ver = GREEDY;
+                std::cout<<"-------------------------"<<std::endl;
+                t1 = std::chrono::high_resolution_clock::now();
+                simulatedAnnealing(initial_temp, final_temp, max_iters, ver);
+                t2 = std::chrono::high_resolution_clock::now();
+                ms_int = std::chrono::duration_cast<std::chrono::milliseconds>(t2 - t1);
+                std::cout<<ms_int.count()<<" w milisekundach"<<std::endl;
+                std::cout<<"Rozwiązano algorytmem symulowanego wyżarzania (greedy), Cmax = "<<Cmax<<std::endl;
+                std::cout<<"-------------------------"<<std::endl;
+                break;
+            case '4':
+                ver = REHEAT;
+                std::cout<<"-------------------------"<<std::endl;
+                t1 = std::chrono::high_resolution_clock::now();
+                simulatedAnnealing(initial_temp, final_temp, max_iters, ver);
+                t2 = std::chrono::high_resolution_clock::now();
+                ms_int = std::chrono::duration_cast<std::chrono::milliseconds>(t2 - t1);
+                std::cout<<ms_int.count()<<" w milisekundach"<<std::endl;
+                std::cout<<"Rozwiązano algorytmem symulowanego wyżarzania (reheating), Cmax = "<<Cmax<<std::endl;
+                std::cout<<"-------------------------"<<std::endl;
+                break;
+            case '5':
+                ver = BOTH;
+                std::cout<<"-------------------------"<<std::endl;
+                t1 = std::chrono::high_resolution_clock::now();
+                simulatedAnnealing(initial_temp, final_temp, max_iters, ver);
+                t2 = std::chrono::high_resolution_clock::now();
+                ms_int = std::chrono::duration_cast<std::chrono::milliseconds>(t2 - t1);
+                std::cout<<ms_int.count()<<" w milisekundach"<<std::endl;
+                std::cout<<"Rozwiązano algorytmem symulowanego wyżarzania (oba), Cmax = "<<Cmax<<std::endl;
                 std::cout<<"-------------------------"<<std::endl;
                 break;
             case 'p':
@@ -471,6 +557,7 @@ void Solution::menu(){
 }
 
 void Solution::annealingTest(std::string filename){
+    Version ver = NORMAL;
     srand(time(0));
     readFromFile(filename);
 
@@ -485,7 +572,7 @@ void Solution::annealingTest(std::string filename){
     std::cout<<"MAX_ITERS = n*n*m"<<std::endl;
     for(int i = 0; i<10; i++){
         t1 = std::chrono::high_resolution_clock::now();
-        simulatedAnnealing(max_temp, min_temp, max_iters);
+        simulatedAnnealing(max_temp, min_temp, max_iters, ver);
         t2 = std::chrono::high_resolution_clock::now();
         ms_int = std::chrono::duration_cast<std::chrono::milliseconds>(t2 - t1);
         std::cout<<ms_int.count()<<" w milisekundach"<<std::endl;
@@ -495,7 +582,7 @@ void Solution::annealingTest(std::string filename){
     std::cout<<"MAX_ITERS = n*n*m*2"<<std::endl;
     for(int i = 0; i<10; i++){
         t1 = std::chrono::high_resolution_clock::now();
-        simulatedAnnealing(max_temp, min_temp, max_iters);
+        simulatedAnnealing(max_temp, min_temp, max_iters, ver);
         t2 = std::chrono::high_resolution_clock::now();
         ms_int = std::chrono::duration_cast<std::chrono::milliseconds>(t2 - t1);
         std::cout<<ms_int.count()<<" w milisekundach"<<std::endl;
@@ -506,7 +593,7 @@ void Solution::annealingTest(std::string filename){
     std::cout<<"MAX_ITERS = n*n*m/2"<<std::endl;
     for(int i = 0; i<10; i++){
         t1 = std::chrono::high_resolution_clock::now();
-        simulatedAnnealing(max_temp, min_temp, max_iters);
+        simulatedAnnealing(max_temp, min_temp, max_iters, ver);
         t2 = std::chrono::high_resolution_clock::now();
         ms_int = std::chrono::duration_cast<std::chrono::milliseconds>(t2 - t1);
         std::cout<<ms_int.count()<<" w milisekundach"<<std::endl;
@@ -518,7 +605,7 @@ void Solution::annealingTest(std::string filename){
     std::cout<<"MAX_TEMP = n*n*2"<<std::endl;
     for(int i = 0; i<10; i++){
         t1 = std::chrono::high_resolution_clock::now();
-        simulatedAnnealing(max_temp, min_temp, max_iters);
+        simulatedAnnealing(max_temp, min_temp, max_iters, ver);
         t2 = std::chrono::high_resolution_clock::now();
         ms_int = std::chrono::duration_cast<std::chrono::milliseconds>(t2 - t1);
         std::cout<<ms_int.count()<<" w milisekundach"<<std::endl;
@@ -528,7 +615,7 @@ void Solution::annealingTest(std::string filename){
     std::cout<<"MAX_TEMP = n*n*4"<<std::endl;
     for(int i = 0; i<10; i++){
         t1 = std::chrono::high_resolution_clock::now();
-        simulatedAnnealing(max_temp, min_temp, max_iters);
+        simulatedAnnealing(max_temp, min_temp, max_iters, ver);
         t2 = std::chrono::high_resolution_clock::now();
         ms_int = std::chrono::duration_cast<std::chrono::milliseconds>(t2 - t1);
         std::cout<<ms_int.count()<<" w milisekundach"<<std::endl;
@@ -540,7 +627,7 @@ void Solution::annealingTest(std::string filename){
     std::cout<<"MIN_TEMP = 1/n*2"<<std::endl;
     for(int i = 0; i<10; i++){
         t1 = std::chrono::high_resolution_clock::now();
-        simulatedAnnealing(max_temp, min_temp, max_iters);
+        simulatedAnnealing(max_temp, min_temp, max_iters, ver);
         t2 = std::chrono::high_resolution_clock::now();
         ms_int = std::chrono::duration_cast<std::chrono::milliseconds>(t2 - t1);
         std::cout<<ms_int.count()<<" w milisekundach"<<std::endl;
@@ -550,7 +637,7 @@ void Solution::annealingTest(std::string filename){
     std::cout<<"MIN_TEMP = 1/n*4"<<std::endl;
     for(int i = 0; i<10; i++){
         t1 = std::chrono::high_resolution_clock::now();
-        simulatedAnnealing(max_temp, min_temp, max_iters);
+        simulatedAnnealing(max_temp, min_temp, max_iters, ver);
         t2 = std::chrono::high_resolution_clock::now();
         ms_int = std::chrono::duration_cast<std::chrono::milliseconds>(t2 - t1);
         std::cout<<ms_int.count()<<" w milisekundach"<<std::endl;

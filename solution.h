@@ -1,5 +1,12 @@
 #include "product.h"
 
+enum Version{
+    NORMAL,
+    GREEDY,
+    REHEAT,
+    BOTH
+};
+
 class Solution{
     private:
         std::vector<Product> problem;
@@ -17,11 +24,11 @@ class Solution{
         //sąsiedztwo typu swap, dwie różne liczby
         std::vector<int> generateRandomNeigh(std::vector<int> curr);
         std::vector<std::vector<int>> generateNeighbours(std::vector<int> curr, int size);
+        std::vector<int> generateBestNeighbour(std::vector<int> curr, int size);
         std::pair<int, int> findSwapped(std::vector<int> curr, std::vector<int> neigh);
         void QNEH();
         //wyżarzanie
-        void simulatedAnnealing(float initial_temp, float final_temp, int max_iterations);
-        //struktura do branch and bound
+        void simulatedAnnealing(float initial_temp, float final_temp, int max_iterations, Version v);
 
         //LICZENIE CMAX DLA NO WAIT FLOW SHOP
         int noWaitCmax(); //liczenie Cmaxa klasycznie

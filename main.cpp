@@ -5,6 +5,6 @@ int main(){
     //s.annealingTest("data031.txt");
     //s.menu();
 
-    s.noWaitCmaxTest();
+    s.menu();
     return 0;
 }
