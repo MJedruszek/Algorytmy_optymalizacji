@@ -135,8 +135,8 @@ void Solution::bruteforce(){
 
 std::vector<int> Solution::generateRandomNeigh(std::vector<int> curr){
     int i = std::rand()%(problem.size()); //wygeneruj losowy indeks od 0 do n
-    int j = std::rand()%problem.size(); //wygeneruj drugi losowy indeks od 0 do n
-    while(j==i) j = std::rand()%problem.size();
+    int j = std::rand()%(problem.size()); //wygeneruj drugi losowy indeks od 0 do n
+    while(j==i) j = std::rand()%(problem.size());
     std::vector<int> new_n = curr;
     new_n[i] = curr[j];
     new_n[j] = curr[i];
@@ -371,7 +371,6 @@ void Solution::simulatedAnnealing(float initial_temp, float final_temp, int max_
     QNEH();
     calculateDelayMatrix();
     
-    //neh
     int n = 1;
     if(v==GREEDY || v==BOTH){
         n = max_iterations/200;
@@ -393,6 +392,7 @@ void Solution::simulatedAnnealing(float initial_temp, float final_temp, int max_
     float temp = initial_temp;
     int i = 0;
     int last = 0;
+    int best_it = 0;
 
 
     while(temp>final_temp && i<max_iterations){
@@ -429,19 +429,24 @@ void Solution::simulatedAnnealing(float initial_temp, float final_temp, int max_
                 best_sequence = current_sequence;
                 //std::cout<<"HERE"<<std::endl;
                 last = 0;
+                best_it = i;
             }
         }
         //jeśli nie mamy włączonego reheating, zmniejsz temp
         if(v == NORMAL || v == GREEDY) temp = temp * cooling_rate;
-        //jeśli nie przekroczyliśmy 20% wszystkich iteracji bez poprawy, zmniejsz temp 
-        else if (last<=(max_iterations/5)) temp = temp * cooling_rate;
-        //jeśli już minęło 20%, zwiększ temperaturę do 1/4 początkowej
-        else temp = initial_temp/4;
+        //jeśli nie przekroczyliśmy 33% wszystkich iteracji bez poprawy, zmniejsz temp 
+        else if (last<=(max_iterations/3)) temp = temp * cooling_rate;
+        //jeśli już minęło 33%, zwiększ temperaturę do 1/4 początkowej
+        else {
+            temp = initial_temp/4;
+            last=0;
+        }
         i++;
         last++;
     }
     Cmax = best_cmax;
     result = best_sequence;
+    std::cout<<"Best iteration: "<<best_it<<std::endl;
 }
 
 void Solution::menu(){
@@ -457,7 +462,6 @@ void Solution::menu(){
     char choice = '-';
     
     std::string tmp;
-    //do tabu
     int max_iters = problem.size()*m*200;
     int tabu_size = problem.size();
     int neigh_size = problem.size();
