@@ -5,6 +5,6 @@ int main(){
     //s.annealingTest("data031.txt");
     //s.menu();
 
-    s.menu();
+    s.annealingTest("test.txt");
     return 0;
 }

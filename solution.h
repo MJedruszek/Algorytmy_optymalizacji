@@ -30,7 +30,7 @@ class Solution{
         std::pair<int, int> findSwapped(std::vector<int> curr, std::vector<int> neigh);
         void QNEH();
         //wyżarzanie
-        void simulatedAnnealing(float initial_temp, float final_temp, int max_iterations, Version v);
+        void simulatedAnnealing(float initial_temp, float final_temp, int max_iterations, Version v, int n);
         //B&B
         struct Node {
             std::vector<bool> scheduled; //czy zadanie i jest przypisane?
