@@ -1,4 +1,6 @@
 #include "product.h"
+#include <limits.h>
+#include <stack>
 
 enum Version{
     NORMAL,
@@ -29,6 +31,22 @@ class Solution{
         void QNEH();
         //wyżarzanie
         void simulatedAnnealing(float initial_temp, float final_temp, int max_iterations, Version v);
+        //B&B
+        struct Node {
+            std::vector<bool> scheduled; //czy zadanie i jest przypisane?
+            std::vector<int> path; //uszeregowane zadania
+            int lowerBound;
+            int lvl;
+            
+            // Do priority queue
+            bool operator>(const Node& other) const {
+                return lowerBound > other.lowerBound;
+            }
+
+            Node(int n): scheduled(n, false), lvl(0), lowerBound(0){};
+        };
+        int calculateLowerBound(const Node& node);
+        void branchAndBound();
 
         //LICZENIE CMAX DLA NO WAIT FLOW SHOP
         int noWaitCmax(); //liczenie Cmaxa klasycznie

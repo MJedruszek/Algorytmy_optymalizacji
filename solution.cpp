@@ -449,6 +449,141 @@ void Solution::simulatedAnnealing(float initial_temp, float final_temp, int max_
     std::cout<<"Best iteration: "<<best_it<<std::endl;
 }
 
+int Solution::calculateLowerBound(const Node& node) {
+    int c = 0;
+
+    // 1. Obliczamy sumę czasów uszeregowanych zadań
+    if (!node.path.empty()) {
+        for (size_t i = 0; i < node.path.size() - 1; i++) {
+            c += delays[node.path[i]][node.path[i + 1]];
+        }
+    }
+
+    // Wyznaczamy listę zadań, które jeszcze NIE zostały uszeregowane
+    std::vector<int> unscheduled;
+    for (int i = 0; i < problem.size(); i++) {
+        if (!node.scheduled[i]) {
+            unscheduled.push_back(i);
+        }
+    }
+
+    // Jeśli uszeregowaliśmy już wszystkie zadania, dodajemy totalP ostatniego i kończymy
+    // Dodajemy je dlatego, że w przypadku uszeregowania wszystkich obliczyliśmy tylko delays,
+    // czyli bez czasu ostatniego zadania
+    if (unscheduled.empty()) {
+        if (!node.path.empty()) {
+            c += totalP[node.path.back()];
+        }
+        return c;
+    }
+
+    // 2. Jeśli na ścieżce są już jakieś zadania, ale nie wszystkie, 
+    // szukamy minimalnego możliwego czasu wykonywania spośród pozostałych opcji
+    if (!node.path.empty()) {
+        int lastJob = node.path.back();
+        int minTransitionFromLast = INT_MAX;
+        for (int u : unscheduled) {
+            if (delays[lastJob][u] < minTransitionFromLast) {
+                minTransitionFromLast = delays[lastJob][u];
+            }
+        }
+        c += minTransitionFromLast;
+    }
+
+    // 3. Dla każdego nieuszeregowanego zadania szacujemy jego minimalny wkład:
+    // Albo przejdzie w inne nieuszeregowane zadanie (wtedy bierzemy minimalny delay),
+    // albo będzie absolutnie ostatnim zadaniem w uszeregowaniu (wtedy wniesie swoje totalP).
+    for (size_t i = 0; i < unscheduled.size(); i++) {
+        int u = unscheduled[i];
+        int min_outgoing = totalP[u]; // założenie pesymistyczne: u jest ostatnim zadaniem
+        
+        for (size_t j = 0; j < unscheduled.size(); j++) {
+            if (i == j) continue;
+            int v = unscheduled[j];
+            if (delays[u][v] < min_outgoing) {
+                min_outgoing = delays[u][v];
+            }
+        }
+        c += min_outgoing;
+    }
+
+    return c;
+}
+
+void Solution::branchAndBound() {
+    // Inicjalizujemy macierz opóźnień oraz tablicę totalP przed startem algorytmu
+    calculateDelayMatrix();
+
+    std::stack<Node> dfs_stack;
+
+    Node first(problem.size()); // pierwszy węzeł (pusty)
+
+    // Liczymy dolne ograniczenie dla pierwszego węzła
+    first.lowerBound = calculateLowerBound(first); 
+
+    dfs_stack.push(first); // dodajemy do kolejki
+    int max_iters = problem.size()*m*200;
+    int tabu_size = problem.size();
+    int neigh_size = problem.size();
+    float initial_temp = 1000000.0;
+    float final_temp = 0.001;
+    Version ver = BOTH;
+    simulatedAnnealing(initial_temp, final_temp, max_iters, ver);
+    
+    // Ustalamy upperBound na podstawie wyniku QNEHa używając no-wait Cmax
+    int upperBound = cmaxDelays(); 
+    std::vector<int> best = result;
+    result.clear();
+
+    while (!dfs_stack.empty()) {
+        // Pobieramy węzeł o najniższym (najlepszym) Lower Bound
+        Node current = dfs_stack.top();
+        dfs_stack.pop();
+
+        // Pruning - jeśli oszacowanie jest gorsze lub równe aktualnemu upperBound, 
+        // to z tego węzła ani kolejnych w kolejce nie wyciągniemy już nic lepszego
+        // Nie jest to już pqueue, stąd continue
+        if (current.lowerBound >= upperBound) {
+            result = best;
+            Cmax = cmaxDelays();
+            continue;
+        }
+
+        // Jeśli dotarliśmy do liścia
+        if (current.lvl == problem.size()) { 
+            result = current.path;
+            int c = cmaxDelays();
+            if (c < upperBound) { // znaleźliśmy lepsze rozwiązanie globalne
+                upperBound = c;
+                best = result;
+            }
+            continue;
+        }
+
+        for (int j = 0; j < problem.size(); j++) {
+            if (!current.scheduled[j]) { 
+                Node child = current;    
+                
+                child.scheduled[j] = true;
+                child.path.push_back(j);
+                child.lvl++;
+                
+                // Liczymy dolne ograniczenie dla dziecka
+                child.lowerBound = calculateLowerBound(child);
+                
+                // Jeśli obiecujący rezultat, dodajemy go do kolejki
+                if (child.lowerBound < upperBound) {
+                    dfs_stack.push(child);
+                }
+            }
+        }
+    }
+
+    // Zapisujemy ostateczny najlepszy wynik
+    result = best;
+    Cmax = cmaxDelays();
+}
+
 void Solution::menu(){
     srand(time(0));
     std::string filename;
@@ -477,6 +612,7 @@ void Solution::menu(){
         std::cout<<"3 - symulowane wyżarzanie (k sąsiadów)"<<std::endl;
         std::cout<<"4 - symulowane wyżarzanie (zwiększenie temperatury)"<<std::endl;
         std::cout<<"5 - symulowane wyżarzanie (obie zmiany)"<<std::endl;
+        std::cout<<"6 - Branch and bound (optymalne rozwiązanie)"<<std::endl;
         std::cout<<"Aby wyświetlić ostatnie zapisane rozwiązanie, wpisz p"<<std::endl;
         std::cout<<"Aby wyjść, wpisz q"<<std::endl;
         std::cin>>choice;
@@ -545,6 +681,16 @@ void Solution::menu(){
                 ms_int = std::chrono::duration_cast<std::chrono::milliseconds>(t2 - t1);
                 std::cout<<ms_int.count()<<" w milisekundach"<<std::endl;
                 std::cout<<"Rozwiązano algorytmem symulowanego wyżarzania (oba), Cmax = "<<Cmax<<std::endl;
+                std::cout<<"-------------------------"<<std::endl;
+                break;
+            case '6':
+                std::cout<<"-------------------------"<<std::endl;
+                t1 = std::chrono::high_resolution_clock::now();
+                branchAndBound();
+                t2 = std::chrono::high_resolution_clock::now();
+                ms_int = std::chrono::duration_cast<std::chrono::milliseconds>(t2 - t1);
+                std::cout<<ms_int.count()<<" w milisekundach"<<std::endl;
+                std::cout<<"Rozwiązano algorytmem branch and bound, optymalne Cmax = "<<Cmax<<std::endl;
                 std::cout<<"-------------------------"<<std::endl;
                 break;
             case 'p':
@@ -820,3 +966,4 @@ void Solution::noWaitCmaxTest(){
     /*5. obliczasz nowy cmax - newCmax = testCmax + delta*/
     /*6. Robisz akceptacje wyniku i dopiero wtedy zmieniasz kolejnosc w result*/
 }
+
