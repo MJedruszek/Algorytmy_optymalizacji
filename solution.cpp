@@ -48,23 +48,20 @@ void Solution::readFromFile(std::string fname){
     result.clear();
     Cmax = 0;
     int size = 0;
-    std::string tmp;
     std::ifstream file(fname);
-    //pobierz rozmiar
-    getline(file, tmp, ' ');
-    size = std::stoi(tmp);
-    //pobierz liczbę kroków
-    getline(file, tmp);
-    m = std::stoi(tmp);
+    if (!file.is_open()) return; 
+    file >> size >> m;
     //kolejno pobierz dane z pliku i zapisz je do wektora
     for(int i = 0; i<size; i++){
         std::vector<int> pj;
-        for(int j=0; j<m-1; j++){
-            getline(file, tmp, ' ');
-            pj.push_back(std::stoi(tmp));
-        }      
-        getline(file, tmp);  
-        pj.push_back(std::stoi(tmp));
+        // Since >> handles newlines and spaces identically, 
+        // you can just loop 'm' times continuously.
+        for(int j = 0; j < m; j++){
+            int val;
+            file >> val;
+            pj.push_back(val);
+        }   
+         
         Product p(pj, m);
         problem.push_back(p);
         result.push_back(i);
@@ -976,7 +973,25 @@ std::string versionToString(Version ver) {
     }
 }
 
+std::string changeName(const std::string& filename) {
+    
+    // Find where the directory ends and the extension begins
+    size_t last_slash = filename.find_last_of("/\\");
+    size_t last_dot = filename.find_last_of(".");
+    
+    // Determine the start position and length of the core filename ("test")
+    size_t start = (last_slash == std::string::npos) ? 0 : last_slash + 1;
+    size_t length = (last_dot == std::string::npos || last_dot < start) ? std::string::npos : last_dot - start;
+    
+    std::string new_name = filename.substr(start, length);
+    
+    // Construct the new path
+    std::string output_path = "out/" + new_name + "_results.csv";
+    return output_path;
+}
+
 void Solution::annealingTest(std::string filename){
+    //funkcja zwórci testy dla różnych wartości T_in, max_iters, wersji, sąsiedztw, każde po 10 razy 
     readFromFile(filename);
     // 1. Definiowanie zestawów parametrów do przetestowania
     std::vector<float> initial_temperatures = {1000.0f, 10000.0f, 100000.0f, 1000000.0f}; // 4 różne temperatury
@@ -998,7 +1013,7 @@ void Solution::annealingTest(std::string filename){
     int repetitions = 10;
 
     // 2. Przygotowanie pliku CSV do zapisu
-    std::string output_filename = filename + "_results.csv";
+    std::string output_filename = changeName(filename);
     std::ofstream csv_file(output_filename);
     
     if (!csv_file.is_open()) {
@@ -1042,14 +1057,10 @@ void Solution::annealingTest(std::string filename){
                                       << " (" << (current_run * 100 / total_runs) << "%)" << std::endl;
                         }
 
-                        // UWAGA: Przed każdym uruchomieniem SA warto zresetować stan rozwiązania,
-                        // np. wywołać QNEH() lub wyczyścić result, jeśli Twoje SA tego samo nie robi.
-                        // QNEH(); 
-
                         // Pomiar czasu uruchomienia
                         auto start_time = std::chrono::high_resolution_clock::now();
                         
-                        // Wywołanie Twojego algorytmu SA
+                        // Wywołanie algorytmu SA
                         simulatedAnnealing(init_temp, final_temp, max_iters, ver, neigh_size);
                         
                         auto end_time = std::chrono::high_resolution_clock::now();
